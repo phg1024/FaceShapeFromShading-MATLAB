@@ -7,13 +7,15 @@ Ir = I(:,:,1);
 Ig = I(:,:,2);
 Ib = I(:,:,3);
 
+wsize = 2;
+
 edge_pixels = [];
 for j=1:w
     for i=1:h
         id=(j-1)*h+i;
         
-        x = j-2:j+2;
-        y = i-2:i+2;
+        x = j-wsize:j+wsize;
+        y = i-wsize:i+wsize;
         
         x(x<1) = []; x(x>w) = [];
         y(y<1) = []; y(y>h) = [];

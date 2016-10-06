@@ -41,6 +41,7 @@ num_pixels = length(valid_pixel_indices);
 % initialize normal
 if nargin < 7
     init_normal_map = (I_normal - 0.5) * 2.0;
+    normal_map = init_normal_map;
 else
     normal_map = (normal_map - 0.5) * 2.0;
     init_normal_map = imresize(normal_map, [h, w]);
@@ -70,6 +71,10 @@ LoG_ab = albedo_map_LoG(:,:,3);
 normal_map_LoG = imfilter(init_normal_map, LoG, 'replicate');
 % figure;imshow(normal_map_LoG); title('normal LoG');
 
+LoG_nx_ref = normal_map_LoG(:,:,1);
+LoG_ny_ref = normal_map_LoG(:,:,2);
+LoG_nz_ref = normal_map_LoG(:,:,3);
+
 %% some preparation
 good_indices = zeros(h*w*3, 1);
 good_indices(valid_pixel_indices) = 1; 
@@ -84,6 +89,11 @@ good_indices_1(valid_pixel_indices) = 1;
 bad_indices_1 = 1 - good_indices_1;
 good_indices_1 = logical(good_indices_1);
 bad_indices_1 = logical(bad_indices_1);
+size(valid_pixel_indices)
+good_indices_2 = zeros(h*w*2,1);
+good_indices_2(valid_pixel_indices) = 1;
+good_indices_2(valid_pixel_indices+h*w) = 1;
+good_indices_2 = logical(good_indices_2);
 
 for iter=1:3
     %% estimate lighting coefficients
@@ -92,19 +102,40 @@ for iter=1:3
     A_pixels = [ar(:); ag(:); ab(:)];
     I_pixels = [Ir(:); Ig(:); Ib(:)];
     
-    
-    
-    lhs = repmat(A_pixels, 1, 9) .* [Y;Y;Y];
+    if iter == 1
+        second_order_weight = 1;
+    else
+        second_order_weight = 1;
+    end
+    s_weights = [ones(1, 4), ones(1, 5)*second_order_weight];
+    lhs = repmat(A_pixels, 1, 9) .* [Y;Y;Y] .* repmat(s_weights, size(A_pixels,1), 1);
     rhs = I_pixels;    
     
     lhs(bad_indices, :) = [];
     rhs(bad_indices, :) = [];
     
-    l = (lhs' * lhs) \ (lhs' * rhs);
+    l_lambda = 1e-16;
+    l = (lhs' * lhs + l_lambda*eye(9)) \ (lhs' * rhs);
     
     Yl = Y * l;
+    
 %     lighting_mask = reshape(Yl, h, w);
 %     figure;imagesc(lighting_mask); title('lighting'); axis equal; colorbar; colormap gray;
+
+%     figure; 
+%     [theta_vis, phi_vis] = ndgrid(-pi:pi/32:0.*pi, 0:2*pi/64:2*pi);
+%     x_vis = cos(theta_vis);
+%     y_vis = sin(theta_vis) .* cos(phi_vis);
+%     z_vis = sin(theta_vis) .* sin(phi_vis);
+%     n_vis = [x_vis(:), y_vis(:), z_vis(:)];
+%     Y_vis = makeY(x_vis(:), y_vis(:), z_vis(:));
+%     Yl_vis = Y_vis * l;
+%     n_vis = n_vis .* repmat(Yl_vis, 1, 3);
+%     surf(reshape(n_vis(:,1), size(x_vis)), ...
+%          reshape(n_vis(:,2), size(y_vis)), ...
+%          reshape(n_vis(:,3), size(z_vis)));
+%     title(sprintf('lighting %d', iter)); axis equal;
+%     xlabel('x');ylabel('y');zlabel('z');
     
     %% estimate albedo
     w_reg = 100.0;
@@ -129,7 +160,7 @@ for iter=1:3
     
     %% estimate geometry
     % nx = cos(theta), ny = sin(theta)*cos(phi), nz = sin(theta)*sin(phi)
-    for i=1:5
+    for i=1:3
         theta = acos(nx);
         phi = atan2(nz, ny);
         
@@ -141,7 +172,7 @@ for iter=1:3
 %         figure; imagesc(phi_mask); title('phi'); axis equal; colorbar;
         
         % data term
-        R = I_pixels - A_pixels .* repmat(Yl, 3, 1);
+        R_data = I_pixels - A_pixels .* repmat(Yl, 3, 1);
         
 %         residue_mask = zeros(h, w);
 %         Rmat = reshape(R, h*w, 3);
@@ -172,35 +203,104 @@ for iter=1:3
         l_dY_dphi = dY_dphi*l;
         ar_vec = ar(:); ag_vec = ag(:); ab_vec = ab(:);
         
-        Jr_theta = sparse(1:num_pixels, 1:num_pixels, l_dY_dtheta(valid_pixel_indices).*ar_vec(valid_pixel_indices));
-        Jr_phi = sparse(1:num_pixels, 1:num_pixels, l_dY_dphi(valid_pixel_indices).*ar_vec(valid_pixel_indices));
-        Jg_theta = sparse(1:num_pixels, 1:num_pixels, l_dY_dtheta(valid_pixel_indices).*ag_vec(valid_pixel_indices));
-        Jg_phi = sparse(1:num_pixels, 1:num_pixels, l_dY_dphi(valid_pixel_indices).*ag_vec(valid_pixel_indices));
-        Jb_theta = sparse(1:num_pixels, 1:num_pixels, l_dY_dtheta(valid_pixel_indices).*ab_vec(valid_pixel_indices));
-        Jb_phi = sparse(1:num_pixels, 1:num_pixels, l_dY_dphi(valid_pixel_indices).*ab_vec(valid_pixel_indices));
+        Jr_theta = sparse(1:num_pixels, 1:num_pixels, -l_dY_dtheta(valid_pixel_indices).*ar_vec(valid_pixel_indices));
+        Jr_phi = sparse(1:num_pixels, 1:num_pixels, -l_dY_dphi(valid_pixel_indices).*ar_vec(valid_pixel_indices));
+        Jg_theta = sparse(1:num_pixels, 1:num_pixels, -l_dY_dtheta(valid_pixel_indices).*ag_vec(valid_pixel_indices));
+        Jg_phi = sparse(1:num_pixels, 1:num_pixels, -l_dY_dphi(valid_pixel_indices).*ag_vec(valid_pixel_indices));
+        Jb_theta = sparse(1:num_pixels, 1:num_pixels, -l_dY_dtheta(valid_pixel_indices).*ab_vec(valid_pixel_indices));
+        Jb_phi = sparse(1:num_pixels, 1:num_pixels, -l_dY_dphi(valid_pixel_indices).*ab_vec(valid_pixel_indices));
+
+        J_data = [Jr_theta, Jr_phi; ...
+                  Jg_theta, Jg_phi; ...
+                  Jb_theta, Jb_phi];
         
-        J_data = [Jr_theta, Jg_theta, Jb_theta; ...
-                  Jr_phi, Jg_phi, Jb_phi]';
+        % integrability term
+        w_int = 1.0;
+        nz_threshold = 1e-3;
+        small_shift = 1e-5;
+        nz_fixed = nz;
+        small_nz_idx = find(abs(nz_fixed) < nz_threshold);
+        nz_fixed(small_nz_idx) = sign(nz_fixed(small_nz_idx)) * nz_threshold;
+        nx_over_nz = nx ./ (nz_fixed + small_shift);
+        ny_over_nz = ny ./ (nz_fixed + small_shift);
         
-        % integrability term        
+        dnx_over_nz_dtheta = (nz .* dnx_dtheta - nx .* dnz_dtheta) ./ (nz .* nz + small_shift);
+        dny_over_nz_dtheta = (nz .* dny_dtheta - ny .* dnz_dtheta) ./ (nz .* nz + small_shift);
+        
+        dnx_over_nz_dphi = (nz .* dnx_dphi - nx .* dnz_dphi) ./ (nz .* nz + small_shift);
+        dny_over_nz_dphi = (nz .* dny_dphi - ny .* dnz_dphi) ./ (nz .* nz + small_shift);
+        
+        pixel_indices = reshape(1:h*w, h, w);
+        pixel_indices_shift_up = circshift(pixel_indices, -1);    % -1
+        pixel_indices_shift_right = circshift(pixel_indices, [0, 1]);   % -1
+        v_pixel_indices = pixel_indices(:);
+        v_pixel_indices_shift_up = pixel_indices_shift_up(:);
+        v_pixel_indices_shift_right = pixel_indices_shift_right(:);
+                
+        C1 = sparse(1:h*w, v_pixel_indices, ones(h*w, 1)) - sparse(1:h*w, v_pixel_indices_shift_up, ones(h*w, 1));
+        C2 = sparse(1:h*w, v_pixel_indices, ones(h*w, 1)) - sparse(1:h*w, v_pixel_indices_shift_right, ones(h*w, 1));
+        
+        R_int = (C1 * nx_over_nz - C2 * ny_over_nz) * w_int;
+        
+        bad_int_idx = find(abs(R_int)>1);
+        R_int(bad_int_idx) = 0;
+
+        J_int = [C1 * spdiags(dnx_over_nz_dtheta, 0, h*w, h*w) - C2 * spdiags(dny_over_nz_dtheta, 0, h*w, h*w), ...
+                 C1 * spdiags(dnx_over_nz_dphi, 0, h*w, h*w) - C2 * spdiags(dny_over_nz_dphi, 0, h*w, h*w)];
+        
+        J_int = J_int(good_indices_1, good_indices_2) * w_int;
+        
+        % regularization term
+        w_reg = 0.0;
+        
+        R_reg = mat_LoG * [nx0(:) - nx, ny0(:) - ny, nz0(:) - nz];
+        R_reg = reshape(R_reg, [], 1);
+
+        tic;
+        dRx_dtheta = -mat_LoG * spdiags(dnx_dtheta, 0, h*w, h*w);
+        dRy_dtheta = -mat_LoG * spdiags(dny_dtheta, 0, h*w, h*w);
+        dRz_dtheta = -mat_LoG * spdiags(dnz_dtheta, 0, h*w, h*w);
+
+        Jx_theta = dRx_dtheta(valid_pixel_indices, valid_pixel_indices);
+        Jy_theta = dRy_dtheta(valid_pixel_indices, valid_pixel_indices);
+        Jz_theta = dRz_dtheta(valid_pixel_indices, valid_pixel_indices);
+        
+        dRx_dphi = -mat_LoG * spdiags(dnx_dphi, 0, h*w, h*w);
+        dRy_dphi = -mat_LoG * spdiags(dny_dphi, 0, h*w, h*w);
+        dRz_dphi = -mat_LoG * spdiags(dnz_dphi, 0, h*w, h*w);
+        
+        Jx_phi = dRx_dphi(valid_pixel_indices, valid_pixel_indices);
+        Jy_phi = dRy_dphi(valid_pixel_indices, valid_pixel_indices);
+        Jz_phi = dRz_dphi(valid_pixel_indices, valid_pixel_indices);
+        toc;
+        
+        J_reg = [Jx_theta, Jx_phi;
+                 Jy_theta, Jy_phi;
+                 Jz_theta, Jz_phi];
+        J_reg = J_reg * w_reg;
+        R_reg = R_reg * w_reg;
         
         % solve it
         fprintf('solving for normal ...\n');
-        w_reg = 1.0;
+        w_lambda = 1;
         tic;
         M_reg = spdiags(ones(size(J_data, 2), 1), 0, size(J_data, 2), size(J_data, 2));
-        JTJ = J_data' * J_data;
-        JTR = J_data' * R(good_indices);
-        dx = (JTJ + w_reg * M_reg) \ JTR;
-        dx = max(-pi/16, min(pi/16, dx));
+        J = [J_data; J_int; J_reg];
+        R = [R_data(good_indices); ...
+             R_int(good_indices_1); ...
+             R_reg(good_indices)];
+        JTJ = J' * J;
+        JTR = J' * R;
+        dx = (JTJ + w_lambda * M_reg) \ JTR;
+        dx = max(-pi/4, min(pi/4, dx));
         toc;
         
 %         [Rcdf, xcenter] = hist(R); figure;plot(xcenter, Rcdf);title('R');
 %         figure;plot(dx);title('dx');
 %         [JJJR, xcenter] = hist(dx);figure;plot(xcenter, JJJR);title('hist dx');
         
-        theta(good_indices_1) = theta(good_indices_1) + dx(1:num_pixels);
-        phi(good_indices_1) = phi(good_indices_1) + dx(num_pixels+1:end);
+        theta(good_indices_1) = theta(good_indices_1) - dx(1:num_pixels);
+        phi(good_indices_1) = phi(good_indices_1) - dx(num_pixels+1:end);
         fprintf('done.\n');
         
 %         theta_mask = zeros(h, w);
@@ -231,4 +331,8 @@ subplot(1, 4, 3); imshow(I_normal); title('normal');
 subplot(1, 4, 4); imshow(normal_map); title('refined normal');
 set(hfig, 'Position', [0 0 1200 480])
 
+end
+
+function Y = makeY(nx, ny, nz)
+Y = [ones(size(nx)), nx, ny, nz, nx.*ny, nx.*nz, ny.*nz, nx.*nx-ny.*ny, 3*nz.*nz-1];
 end

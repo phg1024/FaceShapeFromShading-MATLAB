@@ -19,3 +19,7 @@ toc;
 
 pause(2);
 end
+
+return;
+
+refined_normal_map = SFS('4.png', 'albedo4.png', 'normal4.png', LoG, mat_LoG);
