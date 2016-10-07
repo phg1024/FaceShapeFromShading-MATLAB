@@ -1,4 +1,4 @@
-function [normal_map] = SFS(input_file, albedo_file, normal_file, ...
+function [normal_map] = SFS(input_file, albedo_file, normal_file, depth_file, ...
                             LoG, mat_LoG, ...
                             downsample_factor, normal_map)
 
@@ -8,7 +8,12 @@ I_albedo = im2double(imread(albedo_file));
 I_normal = im2double(imread(normal_file));
 I_normal_raw = imread(normal_file);
 
-if nargin > 5
+I_depth = load_depth_map(depth_file);
+
+plot_depth(I_depth);
+pause
+
+if nargin > 6
     I_input = imresize(I_input, downsample_factor);
     I_albedo = imresize(I_albedo, downsample_factor);
     I_normal = imresize(I_normal, downsample_factor);
@@ -30,7 +35,9 @@ end
 Inx = I_normal_raw(:,:,1); Iny = I_normal_raw(:,:,2); Inz = I_normal_raw(:,:,3);
 valid_pixel_indices = intersect(intersect(find(Inx~=0), find(Iny~=0)), find(Inz~=0));
 edge_pixel_indices = find_edge(I_normal_raw);
+hair_pixel_indices = find_hair_pixels(I_input, valid_pixel_indices);
 valid_pixel_indices = setdiff(valid_pixel_indices, edge_pixel_indices);
+lighting_pixel_indices = setdiff(valid_pixel_indices, hair_pixel_indices);
 size(valid_pixel_indices)
 num_pixels = length(valid_pixel_indices);
 
@@ -38,8 +45,12 @@ num_pixels = length(valid_pixel_indices);
 % valid_pixel_mask(valid_pixel_indices) = 1;
 % figure;imshow(valid_pixel_mask);
 
+lighting_pixels_mask = zeros(h, w);
+lighting_pixels_mask(lighting_pixel_indices) = 1;
+figure;imshow(lighting_pixels_mask);
+
 % initialize normal
-if nargin < 7
+if nargin < 8
     init_normal_map = (I_normal - 0.5) * 2.0;
     normal_map = init_normal_map;
 else
@@ -97,7 +108,8 @@ good_indices_2 = logical(good_indices_2);
 
 for iter=1:3
     %% estimate lighting coefficients
-    Y = [ones(size(nx)), nx, ny, nz, nx.*ny, nx.*nz, ny.*nz, nx.*nx-ny.*ny, 3*nz.*nz-1];
+    t_light=tic;
+    Y = makeY(nx, ny, nz);
     
     A_pixels = [ar(:); ag(:); ab(:)];
     I_pixels = [Ir(:); Ig(:); Ib(:)];
@@ -111,13 +123,17 @@ for iter=1:3
     lhs = repmat(A_pixels, 1, 9) .* [Y;Y;Y] .* repmat(s_weights, size(A_pixels,1), 1);
     rhs = I_pixels;    
     
+    % remove hair pixels
+    lhs(hair_pixel_indices, :) = 0;
+    rhs(hair_pixel_indices, :) = 0;
+    
     lhs(bad_indices, :) = [];
     rhs(bad_indices, :) = [];
     
     l_lambda = 1e-16;
     l = (lhs' * lhs + l_lambda*eye(9)) \ (lhs' * rhs);
     
-    Yl = Y * l;
+    Yl = Y * l;    
     
 %     lighting_mask = reshape(Yl, h, w);
 %     figure;imagesc(lighting_mask); title('lighting'); axis equal; colorbar; colormap gray;
@@ -137,7 +153,10 @@ for iter=1:3
 %     title(sprintf('lighting %d', iter)); axis equal;
 %     xlabel('x');ylabel('y');zlabel('z');
     
+    fprintf('lithting estimation finished in %.3fs\n', toc(t_light));
+    
     %% estimate albedo
+    t_albedo = tic;
     w_reg = 100.0;
     A_up = sparse(1:h*w, 1:h*w, Yl(:), h*w, h*w);
     A_reg = w_reg * mat_LoG;
@@ -157,9 +176,12 @@ for iter=1:3
     albedo_map = zeros(h, w, 3);
     albedo_map(:,:,1) = ar; albedo_map(:,:,2) = ag; albedo_map(:,:,3) = ab;
 %     figure;imshow(albedo_map);title('albedo');  
+
+    fprintf('albedo estimation finished in %.3fs\n', toc(t_albedo));
     
     %% estimate geometry
-    % nx = cos(theta), ny = sin(theta)*cos(phi), nz = sin(theta)*sin(phi)
+    t_normal = tic;
+    % nx = cos(theta), ny = sin(theta)*cos(phi), nz = sin(theta)*sin(phi)    
     for i=1:3
         theta = acos(nx);
         phi = atan2(nz, ny);
@@ -242,7 +264,7 @@ for iter=1:3
         
         R_int = (C1 * nx_over_nz - C2 * ny_over_nz) * w_int;
         
-        bad_int_idx = find(abs(R_int)>1);
+        bad_int_idx = abs(R_int)>1;
         R_int(bad_int_idx) = 0;
 
         J_int = [C1 * spdiags(dnx_over_nz_dtheta, 0, h*w, h*w) - C2 * spdiags(dny_over_nz_dtheta, 0, h*w, h*w), ...
@@ -256,7 +278,6 @@ for iter=1:3
         R_reg = mat_LoG * [nx0(:) - nx, ny0(:) - ny, nz0(:) - nz];
         R_reg = reshape(R_reg, [], 1);
 
-        tic;
         dRx_dtheta = -mat_LoG * spdiags(dnx_dtheta, 0, h*w, h*w);
         dRy_dtheta = -mat_LoG * spdiags(dny_dtheta, 0, h*w, h*w);
         dRz_dtheta = -mat_LoG * spdiags(dnz_dtheta, 0, h*w, h*w);
@@ -272,7 +293,6 @@ for iter=1:3
         Jx_phi = dRx_dphi(valid_pixel_indices, valid_pixel_indices);
         Jy_phi = dRy_dphi(valid_pixel_indices, valid_pixel_indices);
         Jz_phi = dRz_dphi(valid_pixel_indices, valid_pixel_indices);
-        toc;
         
         J_reg = [Jx_theta, Jx_phi;
                  Jy_theta, Jy_phi;
@@ -281,9 +301,8 @@ for iter=1:3
         R_reg = R_reg * w_reg;
         
         % solve it
-        fprintf('solving for normal ...\n');
-        w_lambda = 1;
-        tic;
+%         fprintf('solving for normal ...\n');
+        w_lambda = 1.0 - 0.25 * (iter-1);
         M_reg = spdiags(ones(size(J_data, 2), 1), 0, size(J_data, 2), size(J_data, 2));
         J = [J_data; J_int; J_reg];
         R = [R_data(good_indices); ...
@@ -292,8 +311,7 @@ for iter=1:3
         JTJ = J' * J;
         JTR = J' * R;
         dx = (JTJ + w_lambda * M_reg) \ JTR;
-        dx = max(-pi/4, min(pi/4, dx));
-        toc;
+        dx = max(-pi/3, min(pi/3, dx));
         
 %         [Rcdf, xcenter] = hist(R); figure;plot(xcenter, Rcdf);title('R');
 %         figure;plot(dx);title('dx');
@@ -301,7 +319,7 @@ for iter=1:3
         
         theta(good_indices_1) = theta(good_indices_1) - dx(1:num_pixels);
         phi(good_indices_1) = phi(good_indices_1) - dx(num_pixels+1:end);
-        fprintf('done.\n');
+%         fprintf('done.\n');
         
 %         theta_mask = zeros(h, w);
 %         theta_mask(valid_pixel_indices) = theta;
@@ -316,6 +334,7 @@ for iter=1:3
 %         lighting_mask = reshape(Yl, h, w);
 %         figure;imagesc(lighting_mask); title('lighting\_new'); axis equal; colorbar; colormap gray;
     end
+    fprintf('normal estimation finished in %.3fs\n', toc(t_normal));
     
     normal_map = zeros(h, w, 3);
     normal_map(:,:,1) = reshape(nx, h, w); 
@@ -323,6 +342,14 @@ for iter=1:3
     normal_map(:,:,3) = reshape(nz, h, w);
     normal_map = (normal_map + 1.0) * 0.5;
 end
+
+%% recover depth
+[dh, dw, ~] = size(I_depth);
+
+final_normal_map = imresize(normal_map, [dh, dw]);
+depth0 = I_depth;
+
+
 
 hfig = figure;
 subplot(1, 4, 1); imshow(I_input); title('input');
