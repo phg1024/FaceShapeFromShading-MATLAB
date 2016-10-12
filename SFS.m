@@ -8,10 +8,17 @@ I_albedo = im2double(imread(albedo_file));
 I_normal = im2double(imread(normal_file));
 I_normal_raw = imread(normal_file);
 
-I_depth = load_depth_map(depth_file);
+resize_to_input = true;
 
-plot_depth(I_depth);
-pause
+if resize_to_input
+    [h, w, ~] = size(I_input);
+else
+    [h, w, ~] = size(I_albedo);
+end
+
+I_depth = load_depth_map(depth_file, [h, w]);
+
+plot_depth(I_depth, true);
 
 if nargin > 6
     I_input = imresize(I_input, downsample_factor);
@@ -20,11 +27,12 @@ if nargin > 6
     I_normal_raw = imresize(I_normal_raw, downsample_factor);
 end
 
-if 1
-    [h, w, ~] = size(I_input);
+if resize_to_input
     I_albedo = imresize(I_albedo, [h, w]);
     I_normal = imresize(I_normal, [h, w]);
     I_normal_raw = imresize(I_normal_raw, [h, w]);
+else
+    I_input = imresize(I_input, [h, w]);
 end
 
 % figure;imshow(I_input);title('input');
@@ -47,7 +55,7 @@ num_pixels = length(valid_pixel_indices);
 
 lighting_pixels_mask = zeros(h, w);
 lighting_pixels_mask(lighting_pixel_indices) = 1;
-figure;imshow(lighting_pixels_mask);
+% figure;imshow(lighting_pixels_mask);
 
 % initialize normal
 if nargin < 8
@@ -115,7 +123,7 @@ for iter=1:3
     I_pixels = [Ir(:); Ig(:); Ib(:)];
     
     if iter == 1
-        second_order_weight = 1;
+        second_order_weight = 0;
     else
         second_order_weight = 1;
     end
@@ -130,13 +138,19 @@ for iter=1:3
     lhs(bad_indices, :) = [];
     rhs(bad_indices, :) = [];
     
-    l_lambda = 1e-16;
-    l = (lhs' * lhs + l_lambda*eye(9)) \ (lhs' * rhs);
+    if iter == 1
+        l_lambda = 1e-3;
+        l = (lhs' * lhs + l_lambda*eye(9)) \ (lhs' * rhs);
+    else
+        l_lambda = 1e-16;
+        dl = (lhs' * lhs + l_lambda*eye(9)) \ (lhs' * rhs) - l;
+        l = l + 0.5 * dl;
+    end
     
     Yl = Y * l;    
     
 %     lighting_mask = reshape(Yl, h, w);
-%     figure;imagesc(lighting_mask); title('lighting'); axis equal; colorbar; colormap gray;
+%     figure;imshow(lighting_mask); title('lighting'); axis equal; colorbar; caxis([0, 2]);
 
 %     figure; 
 %     [theta_vis, phi_vis] = ndgrid(-pi:pi/32:0.*pi, 0:2*pi/64:2*pi);
@@ -160,8 +174,11 @@ for iter=1:3
     w_reg = 100.0;
     A_up = sparse(1:h*w, 1:h*w, Yl(:), h*w, h*w);
     A_reg = w_reg * mat_LoG;
+    
     M_reg = spdiags(ones(num_pixels, 1), 0, num_pixels, num_pixels);
     A = [A_up(good_indices_1,good_indices_1); A_reg(good_indices_1,good_indices_1)];
+
+    
     Br = [Ir(good_indices_1); LoG_ar(good_indices_1) * w_reg];
     ar_sub = (A'*A + 0.01*M_reg) \ (A'*Br);
     Bg = [Ig(good_indices_1); LoG_ag(good_indices_1) * w_reg];
@@ -182,7 +199,7 @@ for iter=1:3
     %% estimate geometry
     t_normal = tic;
     % nx = cos(theta), ny = sin(theta)*cos(phi), nz = sin(theta)*sin(phi)    
-    for i=1:3
+    for i=1:5
         theta = acos(nx);
         phi = atan2(nz, ny);
         
@@ -302,7 +319,7 @@ for iter=1:3
         
         % solve it
 %         fprintf('solving for normal ...\n');
-        w_lambda = 1.0 - 0.25 * (iter-1);
+        w_lambda = 1.0 - 0.15 * (iter-1);
         M_reg = spdiags(ones(size(J_data, 2), 1), 0, size(J_data, 2), size(J_data, 2));
         J = [J_data; J_int; J_reg];
         R = [R_data(good_indices); ...
@@ -345,19 +362,126 @@ end
 
 %% recover depth
 [dh, dw, ~] = size(I_depth);
+final_normal_map = imresize(normal_map*2.0-1.0, [dh, dw]);
+%figure;imshow(final_normal_map);
+nx = final_normal_map(:,:,1);
+ny = final_normal_map(:,:,2);
+nz = final_normal_map(:,:,3);
 
-final_normal_map = imresize(normal_map, [dh, dw]);
-depth0 = I_depth;
+nz_threshold = 1e-3;
+small_nz_idx = find(abs(nz_fixed) < nz_threshold);
 
+x0 = I_depth(:,:,1);
+y0 = I_depth(:,:,2);
+depth0 = I_depth(:,:,3);
 
+valid_depth_points = depth0(:)>-1e5;
+edge_pixel_indices = find_depth_edge(depth0, 1);
+valid_depth_points(edge_pixel_indices) = 0;
+edge_pixel_indices = find_depth_edge(depth0, 3);
+valid_depth_points_without_edge = valid_depth_points;
+valid_depth_points_without_edge(edge_pixel_indices) = 0;
+valid_depth_points_2 = logical([valid_depth_points; valid_depth_points + dh*dw]);
+
+size(final_normal_map)
+size(depth0)
+size(valid_depth_points_2)
+
+I_depth_final = I_depth;
+
+% data term
+pixel_indices = reshape(1:dh*dw, dh, dw);
+pixel_indices_shift_up = circshift(pixel_indices, -1);    % -1
+pixel_indices_shift_right = circshift(pixel_indices, [0, 1]);   % -1
+v_pixel_indices = pixel_indices(:);
+v_pixel_indices_shift_up = pixel_indices_shift_up(:);
+v_pixel_indices_shift_right = pixel_indices_shift_right(:);
+
+Cx = sparse(1:dh*dw, v_pixel_indices, ones(dh*dw, 1)) - sparse(1:dh*dw, v_pixel_indices_shift_right, ones(dh*dw, 1));
+Cy = sparse(1:dh*dw, v_pixel_indices, ones(dh*dw, 1)) - sparse(1:dh*dw, v_pixel_indices_shift_up, ones(dh*dw, 1));
+
+% zumz = spdiags(abs(1.0 ./ (Cy * y0(:))), 0, dh*dw, dh*dw) * Cy * depth0(:); zumz = reshape(zumz, dh, dw); 
+% zumz(~valid_depth_points) = 0;
+% figure;imagesc(zumz); title('zumz'); axis equal; caxis([-0.5, 0.5]);
+% nydnz = -ny./nz; nydnz(~valid_depth_points) = 0;
+% figure;imagesc(nydnz); title('nydnz'); axis equal; caxis([-0.5, 0.5]);
+% 
+% zmzl = spdiags(abs(1.0 ./ (Cx * x0(:))), 0, dh*dw, dh*dw) * Cx * depth0(:); zmzl = reshape(zmzl, dh, dw); 
+% zmzl(~valid_depth_points) = 0;
+% figure;imagesc(zmzl); title('zmzl'); axis equal; caxis([-0.5, 0.5]);
+% nxdnz = -nx./nz; nxdnz(~valid_depth_points) = 0;
+% figure;imagesc(nxdnz); title('nxdnz'); axis equal; caxis([-0.5, 0.5]);
+
+w_data = 1.0;
+A_data = [spdiags(abs(1.0 ./ (Cx * x0(:))), 0, dh*dw, dh*dw) * Cx; ...
+          spdiags(abs(1.0 ./ (Cy * y0(:))), 0, dh*dw, dh*dw) * Cy];
+A_data = A_data(valid_depth_points_2, valid_depth_points) * w_data;
+b_data = [-nx(:) ./ nz(:); ...
+          -ny(:) ./ nz(:)];
+b_data = b_data(valid_depth_points_2) * w_data;
+
+% similarity term
+w_sim = ones(dh*dw, 1)* 1.0; 
+w_sim(edge_pixel_indices) = 1000.0;
+A_sim = spdiags(w_sim, 0, dh*dw, dh*dw) * speye(dh*dw, dh*dw);
+A_sim = A_sim(valid_depth_points, valid_depth_points);
+b_sim = depth0(:) .* w_sim;
+b_sim = b_sim(valid_depth_points);
+
+% regularization term
+w_reg = 0.0;
+A_reg = mat_LoG;
+A_reg(edge_pixel_indices, edge_pixel_indices) = 0;
+A_reg = A_reg(valid_depth_points, valid_depth_points) * w_reg;
+b_reg = mat_LoG * depth0(:);
+b_reg(edge_pixel_indices) = 0;
+b_reg = b_reg(valid_depth_points) * w_reg;
+
+% assemble the equations
+A = [A_data; ...
+    A_sim; ...
+    A_reg];
+b = [b_data; ...
+    b_sim; ...
+    b_reg];
+
+% solve it
+new_depth = depth0(valid_depth_points);
+for i=1:10
+    new_depth = new_depth + (rand(size(new_depth)) - 0.5) * 1e-4;
+    R = b - A * new_depth;
+    fprintf('error = %.6f\n', norm(R));
+    
+    lambda = 0.0;
+    delta_depth = -(A'*A + lambda * speye(size(A_data,2), size(A_data,2)))\(A' * R);
+    alpha = 0.1 * i;
+    new_depth = new_depth - alpha * delta_depth;
+end
+
+% update the depth
+depth0(valid_depth_points) = new_depth;
+depth0(~valid_depth_points) = -1e6;
+I_depth_final(:,:,3) = depth0;
+
+plot_depth(I_depth_final, true);
+
+% zumz = spdiags(abs(1.0 ./ (Cy * y0(:))), 0, dh*dw, dh*dw) * Cy * depth0(:); zumz = reshape(zumz, dh, dw); 
+% zumz(~valid_depth_points) = 0;
+% figure;imagesc(zumz); title('zumz - final'); axis equal; caxis([-0.5, 0.5]);
+% zmzl = spdiags(abs(1.0 ./ (Cx * x0(:))), 0, dh*dw, dh*dw) * Cx * depth0(:); zmzl = reshape(zmzl, dh, dw); 
+% zmzl(~valid_depth_points) = 0;
+% figure;imagesc(zmzl); title('zmzl - final'); axis equal; caxis([-0.5, 0.5]);
 
 hfig = figure;
-subplot(1, 4, 1); imshow(I_input); title('input');
-subplot(1, 4, 2); imshow(albedo_map); title('albedo');
-subplot(1, 4, 3); imshow(I_normal); title('normal');
-subplot(1, 4, 4); imshow(normal_map); title('refined normal');
+subplot(1, 6, 1); imshow(I_input); title('input');
+subplot(1, 6, 2); imshow(albedo_map); title('albedo');
+subplot(1, 6, 3); imshow(I_normal); title('normal');
+subplot(1, 6, 4); imshow(normal_map); title('refined normal');
+subplot(1, 6, 5); plot_depth(I_depth, false, true); title('init depth');
+subplot(1, 6, 6); plot_depth(I_depth_final, false, true); title('refined depth');
 set(hfig, 'Position', [0 0 1200 480])
 
+pause
 end
 
 function Y = makeY(nx, ny, nz)
