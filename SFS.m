@@ -22,9 +22,10 @@ plot_depth(I_depth, true);
 
 if nargin > 6
     I_input = imresize(I_input, downsample_factor);
-    I_albedo = imresize(I_albedo, downsample_factor);
-    I_normal = imresize(I_normal, downsample_factor);
-    I_normal_raw = imresize(I_normal_raw, downsample_factor);
+    [h, w, ~] = size(I_input);
+    I_albedo = imresize(I_albedo, [h, w]);
+    I_normal = imresize(I_normal, [h, w]);
+    I_normal_raw = imresize(I_normal_raw, [h, w]);
 end
 
 if resize_to_input
@@ -43,7 +44,8 @@ end
 Inx = I_normal_raw(:,:,1); Iny = I_normal_raw(:,:,2); Inz = I_normal_raw(:,:,3);
 valid_pixel_indices = intersect(intersect(find(Inx~=0), find(Iny~=0)), find(Inz~=0));
 edge_pixel_indices = find_edge(I_normal_raw);
-hair_pixel_indices = find_hair_pixels(I_input, valid_pixel_indices);
+discontinuous_pixels_indices = find_discontinuous_pixels(I_depth, 0.02);
+[hair_pixel_indices, hair_pixel_indices2] = find_hair_pixels(I_input, valid_pixel_indices);
 valid_pixel_indices = setdiff(valid_pixel_indices, edge_pixel_indices);
 lighting_pixel_indices = setdiff(valid_pixel_indices, hair_pixel_indices);
 size(valid_pixel_indices)
@@ -53,9 +55,8 @@ num_pixels = length(valid_pixel_indices);
 % valid_pixel_mask(valid_pixel_indices) = 1;
 % figure;imshow(valid_pixel_mask);
 
-lighting_pixels_mask = zeros(h, w);
-lighting_pixels_mask(lighting_pixel_indices) = 1;
-% figure;imshow(lighting_pixels_mask);
+plot_mask('hair pixels - Hsv', hair_pixel_indices, h, w);
+plot_mask('hair pixels - Lab', hair_pixel_indices2, h, w);
 
 % initialize normal
 if nargin < 8
@@ -199,7 +200,7 @@ for iter=1:3
     %% estimate geometry
     t_normal = tic;
     % nx = cos(theta), ny = sin(theta)*cos(phi), nz = sin(theta)*sin(phi)    
-    for i=1:5
+    for i=1:3
         theta = acos(nx);
         phi = atan2(nz, ny);
         
@@ -275,14 +276,14 @@ for iter=1:3
         v_pixel_indices = pixel_indices(:);
         v_pixel_indices_shift_up = pixel_indices_shift_up(:);
         v_pixel_indices_shift_right = pixel_indices_shift_right(:);
-                
+
         C1 = sparse(1:h*w, v_pixel_indices, ones(h*w, 1)) - sparse(1:h*w, v_pixel_indices_shift_up, ones(h*w, 1));
         C2 = sparse(1:h*w, v_pixel_indices, ones(h*w, 1)) - sparse(1:h*w, v_pixel_indices_shift_right, ones(h*w, 1));
         
         R_int = (C1 * nx_over_nz - C2 * ny_over_nz) * w_int;
-        
-        bad_int_idx = abs(R_int)>1;
-        R_int(bad_int_idx) = 0;
+       
+        % remove integrability constraints for discontinous pixels
+        R_int(discontinuous_pixels_indices) = 0;
 
         J_int = [C1 * spdiags(dnx_over_nz_dtheta, 0, h*w, h*w) - C2 * spdiags(dny_over_nz_dtheta, 0, h*w, h*w), ...
                  C1 * spdiags(dnx_over_nz_dphi, 0, h*w, h*w) - C2 * spdiags(dny_over_nz_dphi, 0, h*w, h*w)];
@@ -319,7 +320,7 @@ for iter=1:3
         
         % solve it
 %         fprintf('solving for normal ...\n');
-        w_lambda = 1.0 - 0.15 * (iter-1);
+        w_lambda = 1.0 - 0.25 * (iter-1);
         M_reg = spdiags(ones(size(J_data, 2), 1), 0, size(J_data, 2), size(J_data, 2));
         J = [J_data; J_int; J_reg];
         R = [R_data(good_indices); ...
@@ -360,6 +361,18 @@ for iter=1:3
     normal_map = (normal_map + 1.0) * 0.5;
 end
 
+if false
+    hfig = figure;
+    subplot(1, 4, 1); imshow(I_input); title('input');
+    subplot(1, 4, 2); imshow(albedo_map); title('albedo');
+    subplot(1, 4, 3); imshow(I_normal); title('normal');
+    subplot(1, 4, 4); imshow(normal_map); title('refined normal');
+    set(hfig, 'Position', [0 0 1200 480])
+    pause
+    
+    return
+end
+
 %% recover depth
 [dh, dw, ~] = size(I_depth);
 final_normal_map = imresize(normal_map*2.0-1.0, [dh, dw]);
@@ -383,9 +396,9 @@ valid_depth_points_without_edge = valid_depth_points;
 valid_depth_points_without_edge(edge_pixel_indices) = 0;
 valid_depth_points_2 = logical([valid_depth_points; valid_depth_points + dh*dw]);
 
-size(final_normal_map)
-size(depth0)
-size(valid_depth_points_2)
+%size(final_normal_map)
+%size(depth0)
+%size(valid_depth_points_2)
 
 I_depth_final = I_depth;
 
@@ -418,11 +431,17 @@ A_data = [spdiags(abs(1.0 ./ (Cx * x0(:))), 0, dh*dw, dh*dw) * Cx; ...
 A_data = A_data(valid_depth_points_2, valid_depth_points) * w_data;
 b_data = [-nx(:) ./ nz(:); ...
           -ny(:) ./ nz(:)];
+% remove discontinous pixels
+b_data([discontinuous_pixels_indices(:); discontinuous_pixels_indices(:)]) = 0;
+% remove hair pixels
+%b_data([hair_pixel_indices; hair_pixel_indices + dh*dw]) = 0;
 b_data = b_data(valid_depth_points_2) * w_data;
 
 % similarity term
 w_sim = ones(dh*dw, 1)* 1.0; 
 w_sim(edge_pixel_indices) = 1000.0;
+w_sim(discontinuous_pixels_indices) = 1000.0;
+%w_sim(hair_pixel_indices) = 1000.0;
 A_sim = spdiags(w_sim, 0, dh*dw, dh*dw) * speye(dh*dw, dh*dw);
 A_sim = A_sim(valid_depth_points, valid_depth_points);
 b_sim = depth0(:) .* w_sim;
@@ -432,9 +451,11 @@ b_sim = b_sim(valid_depth_points);
 w_reg = 0.0;
 A_reg = mat_LoG;
 A_reg(edge_pixel_indices, edge_pixel_indices) = 0;
+A_reg(discontinuous_pixels_indices, discontinuous_pixels_indices) = 0;
 A_reg = A_reg(valid_depth_points, valid_depth_points) * w_reg;
 b_reg = mat_LoG * depth0(:);
 b_reg(edge_pixel_indices) = 0;
+b_reg(discontinuous_pixels_indices) = 0;
 b_reg = b_reg(valid_depth_points) * w_reg;
 
 % assemble the equations
@@ -482,8 +503,15 @@ subplot(1, 6, 6); plot_depth(I_depth_final, false, true); title('refined depth')
 set(hfig, 'Position', [0 0 1200 480])
 
 pause
+
 end
 
 function Y = makeY(nx, ny, nz)
 Y = [ones(size(nx)), nx, ny, nz, nx.*ny, nx.*nz, ny.*nz, nx.*nx-ny.*ny, 3*nz.*nz-1];
+end
+
+function plot_mask(title_str, pixel_indices, h, w)
+mask = zeros(h, w);
+mask(pixel_indices) = 1;
+figure;imshow(mask); title(title_str);
 end
