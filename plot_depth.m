@@ -1,4 +1,4 @@
-function plot_depth(depth, new_figure, surface)
+function plot_depth(depth, new_figure, surface, saveit, filename)
 x = depth(:,:,1);
 y = depth(:,:,2);
 z = depth(:,:,3);
@@ -13,12 +13,16 @@ if nargin < 2
     new_figure=false;
 end
 
-if new_figure
-    figure; 
-end
-
 if nargin < 3
     surface = true;
+end
+
+if nargin < 4
+    saveit = false;
+end
+
+if new_figure || saveit
+    fig = figure;
 end
 
 if surface
@@ -30,4 +34,9 @@ else
 end
 xlabel('x'); ylabel('y'); zlabel('z');
 axis equal; view([0 90]);
+
+if saveit
+    saveas(fig, filename);
+    close(fig);
+end
 end

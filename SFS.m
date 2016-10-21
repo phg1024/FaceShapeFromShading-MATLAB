@@ -1,6 +1,28 @@
-function [normal_map] = SFS(input_file, albedo_file, normal_file, depth_file, ...
-                            LoG, mat_LoG, ...
-                            downsample_factor, normal_map)
+function [normal_map] = SFS(input_file, albedo_file, normal_file, depth_file, options)
+
+if options.silent
+    close all;
+end
+
+LoG = options.LoG;
+mat_LoG = options.mat_LoG;
+
+albedo_LoG = options.albedo_LoG;
+albedo_mat_LoG = options.albedo_mat_LoG;
+
+if isfield(options, 'downsample_factor')
+    downsample_factor = options.dowsample_factor;
+    need_downsample = true;
+else
+    need_downsample = false;
+end
+
+if isfield(options, 'normal_map')
+    normal_map = options.normal_map;
+    has_init_normal_map = true;
+else
+    has_init_normal_map = false;
+end
 
 I_input = im2double(imread(input_file));
 
@@ -20,7 +42,7 @@ I_depth = load_depth_map(depth_file, [h, w]);
 
 plot_depth(I_depth, true);
 
-if nargin > 6
+if need_downsample
     I_input = imresize(I_input, downsample_factor);
     [h, w, ~] = size(I_input);
     I_albedo = imresize(I_albedo, [h, w]);
@@ -44,7 +66,7 @@ end
 Inx = I_normal_raw(:,:,1); Iny = I_normal_raw(:,:,2); Inz = I_normal_raw(:,:,3);
 valid_pixel_indices = intersect(intersect(find(Inx~=0), find(Iny~=0)), find(Inz~=0));
 edge_pixel_indices = find_edge(I_normal_raw);
-discontinuous_pixels_indices = find_discontinuous_pixels(I_depth, 0.02);
+discontinuous_pixels_indices = find_discontinuous_pixels(I_depth, 0.025);
 [hair_pixel_indices, hair_pixel_indices2] = find_hair_pixels(I_input, valid_pixel_indices);
 valid_pixel_indices = setdiff(valid_pixel_indices, edge_pixel_indices);
 lighting_pixel_indices = setdiff(valid_pixel_indices, hair_pixel_indices);
@@ -59,7 +81,7 @@ plot_mask('hair pixels - Hsv', hair_pixel_indices, h, w);
 plot_mask('hair pixels - Lab', hair_pixel_indices2, h, w);
 
 % initialize normal
-if nargin < 8
+if ~has_init_normal_map
     init_normal_map = (I_normal - 0.5) * 2.0;
     normal_map = init_normal_map;
 else
@@ -81,7 +103,7 @@ ar = I_albedo(:,:,1); Ir = I_input(:,:,1);
 ag = I_albedo(:,:,2); Ig = I_input(:,:,2);
 ab = I_albedo(:,:,3); Ib = I_input(:,:,3);
 
-albedo_map_LoG = imfilter(I_albedo, LoG, 'replicate');
+albedo_map_LoG = imfilter(I_albedo, albedo_LoG, 'replicate');
 % figure;imshow(albedo_map_LoG); title('albedo LoG');
 
 LoG_ar = albedo_map_LoG(:,:,1);
@@ -174,7 +196,7 @@ for iter=1:3
     t_albedo = tic;
     w_reg = 100.0;
     A_up = sparse(1:h*w, 1:h*w, Yl(:), h*w, h*w);
-    A_reg = w_reg * mat_LoG;
+    A_reg = w_reg * albedo_mat_LoG;
     
     M_reg = spdiags(ones(num_pixels, 1), 0, num_pixels, num_pixels);
     A = [A_up(good_indices_1,good_indices_1); A_reg(good_indices_1,good_indices_1)];
@@ -359,6 +381,7 @@ for iter=1:3
     normal_map(:,:,2) = reshape(ny, h, w); 
     normal_map(:,:,3) = reshape(nz, h, w);
     normal_map = (normal_map + 1.0) * 0.5;
+    normal_map = max(0, min(1, normal_map));
 end
 
 if false
@@ -494,15 +517,23 @@ plot_depth(I_depth_final, true);
 % figure;imagesc(zmzl); title('zmzl - final'); axis equal; caxis([-0.5, 0.5]);
 
 hfig = figure;
-subplot(1, 6, 1); imshow(I_input); title('input');
-subplot(1, 6, 2); imshow(albedo_map); title('albedo');
-subplot(1, 6, 3); imshow(I_normal); title('normal');
-subplot(1, 6, 4); imshow(normal_map); title('refined normal');
-subplot(1, 6, 5); plot_depth(I_depth, false, true); title('init depth');
-subplot(1, 6, 6); plot_depth(I_depth_final, false, true); title('refined depth');
+subplot(1, 7, 1); imshow(I_input); title('input');
+subplot(1, 7, 2); imshow(albedo_map); title('albedo');
+subplot(1, 7, 3); plot_lighting(l, false); title('lighting');
+subplot(1, 7, 4); imshow(I_normal); title('normal');
+subplot(1, 7, 5); imshow(normal_map); title('refined normal');
+subplot(1, 7, 6); plot_depth(I_depth, false, true); title('init depth');
+subplot(1, 7, 7); plot_depth(I_depth_final, false, true); title('refined depth');
 set(hfig, 'Position', [0 0 1200 480])
 
-pause
+% save all output images
+imwrite(albedo_map, fullfile(options.path, 'SFS', sprintf('optimized_albedo_%d.png', options.idx)));
+imwrite(normal_map, fullfile(options.path, 'SFS', sprintf('optimized_normal_%d.png', options.idx)));
+plot_lighting(l, true, fullfile(options.path, 'SFS', sprintf('optimized_lighting_%d.png', options.idx)));
+save_depth_map(fullfile(options.path, 'SFS', sprintf('optimized_depth_map_%d.bin', options.idx)), I_depth_final);
+save_point_cloud(fullfile(options.path, 'SFS', sprintf('optimized_point_cloud_%d.txt', options.idx)), I_depth_final);
+plot_depth(I_depth, false, true, true, fullfile(options.path, 'SFS', sprintf('depth_mesh_%d.png', options.idx))); 
+plot_depth(I_depth_final, false, true, true, fullfile(options.path, 'SFS', sprintf('optimized_depth_mesh_%d.png', options.idx))); 
 
 end
 

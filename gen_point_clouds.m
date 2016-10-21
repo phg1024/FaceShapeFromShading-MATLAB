@@ -1,0 +1,23 @@
+close all;
+
+persons = {'Andy_Lau',...
+    'Benedict_Cumberbatch',...
+    'Bruce_Willis',...
+    'Donald_Trump',...
+    'George_W_Bush',...
+    'Hillary_Clinton',...
+    'Oprah_Winfrey',...
+    'Zhang_Ziyi'};
+
+for j=1:length(persons)
+    person=persons{j};
+    path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
+    
+    all_images = read_settings(fullfile(path, 'settings.txt'));
+    
+    for i=1:length(all_images)
+        depth_map = fullfile(path, 'SFS', sprintf('optimized_depth_map_%d.bin', i-1));
+        I_depth = load_depth_map(depth_map, [250, 250]);
+        save_point_cloud(fullfile(path, 'SFS', sprintf('optimized_point_cloud_%d.txt', i-1)), I_depth);
+    end
+end

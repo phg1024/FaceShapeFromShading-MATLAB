@@ -38,7 +38,6 @@ L1 = length(hair_pixels)
 L2 = length(hair_pixels2)
 common_pixels = intersect(hair_pixels, hair_pixels2);
 confidence = length(common_pixels) / L1
-pause
 
 % [h, w, ~] = size(I);
 % mask = zeros(h, w);
