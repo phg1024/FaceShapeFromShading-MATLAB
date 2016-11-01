@@ -12,4 +12,9 @@ z(invalid_points) = [];
 fid = fopen(filename, 'w');
 fprintf(fid, '%f %f %f\n', [x(:), y(:), z(:)]');
 fclose(fid);
+
+[path, basename, ext] = fileparts(filename);
+fid = fopen(fullfile(path, [basename, '.obj']), 'w');
+fprintf(fid, 'v %f %f %f\n', [x(:), y(:), z(:)]');
+fclose(fid);
 end

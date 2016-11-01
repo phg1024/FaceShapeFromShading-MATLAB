@@ -1,5 +1,6 @@
 close all;
 
+database_path = '/home/phg/Storage/Data/InternetRecon2/%s/crop';
 persons = {'Andy_Lau',...
     'Benedict_Cumberbatch',...
     'Bruce_Willis',...
@@ -8,10 +9,14 @@ persons = {'Andy_Lau',...
     'Hillary_Clinton',...
     'Oprah_Winfrey',...
     'Zhang_Ziyi'};
+persons = {'Andy_Lau'};
+
+%database_path = '/home/phg/Storage/Data/InternetRecon0/%s/crop';
+%persons = {'yaoming'};
 
 for j=1:length(persons)
     person=persons{j};
-    path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
+    path = sprintf(database_path, person);
     
     all_images = read_settings(fullfile(path, 'settings.txt'));
     

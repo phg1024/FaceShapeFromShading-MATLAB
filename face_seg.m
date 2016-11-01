@@ -2,7 +2,9 @@ close all;
 
 person = 'Benedict_Cumberbatch';
 person = 'Donald_Trump';
+person = 'George_W_Bush';
 person = 'Zhang_Ziyi';
+person = 'Andy_Lau';
 path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
 
 %person = 'yaoming';
@@ -10,18 +12,28 @@ path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
 
 all_images = read_settings(fullfile(path, 'settings.txt'));
 
+mkdir(fullfile(path, 'masked'));
+
 for i=1:length(all_images)
     close all;
+    
+    [~, basename, ext] = fileparts(all_images{i})
     
     input_image = fullfile(path, all_images{i});
     
     albedo_image = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', i-1));
     
     I = im2double(imread(input_image));
+    Ib = I;
+    for j=1:1
+        Ib = bfilter2(Ib, 7, [3 0.1]);
+    end
+    
     [h, w, ~] = size(I);
     Ia = im2double(imread(albedo_image));
     figure;imshow(I);
     figure;imshow(Ia);
+    figure;imshow(Ib);    
     
     Imask = rgb2gray(Ia);
     Imask(Imask > 0) = 1.0;
@@ -37,7 +49,7 @@ for i=1:length(all_images)
     figure;imshow(imoverlay(I .* Imask_rgb,BW .* Imask,'cyan'));
     end
     
-    Ycbcr = rgb2ycbcr(I);
+    Ycbcr = rgb2ycbcr(Ib);
     figure;imshow(Ycbcr);
     cb = Ycbcr(:,:,2);
     cr = Ycbcr(:,:,3);
@@ -65,7 +77,7 @@ for i=1:length(all_images)
         title(['no shifting, numClust:' int2str(numClust)])
     end
     
-    for i=1:3
+    for i=1:1
         figure; subplot(1, 2, 1); hold on;
         scatter(cb(good_pts), cr(good_pts), 10.0, [r(good_pts), g(good_pts), b(good_pts)], 'filled');
         axis equal;
@@ -125,6 +137,10 @@ for i=1:length(all_images)
         subplot(1, 2, 2); imshow(Ifinal);
     end
     
+    % finally, shrink a bit
+    se = strel('disk',1);
+    valid_pts = imerode(valid_pts, se);    
+    
     r = I(:,:,1);
     g = I(:,:,2);
     b = I(:,:,3);
@@ -143,5 +159,8 @@ for i=1:length(all_images)
     subplot(1, 3, 2);imshow(I.*Imask_rgb);
     subplot(1, 3, 3);imshow(Ifinal);
     
-    pause;
+    %imwrite(valid_pts, fullfile(path, [basename, '_mask.png']));
+    imwrite(Ifinal, fullfile(path, 'masked', [basename, '.png']));
+    imwrite(valid_pts, fullfile(path, 'masked', ['mask', basename, '.png']));
+    %pause;
 end

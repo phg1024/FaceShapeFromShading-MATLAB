@@ -1,4 +1,4 @@
-function [normal_map] = SFS(input_file, albedo_file, normal_file, depth_file, options)
+function [normal_map] = SFS(input_file, albedo_file, normal_file, depth_file, mask_file, options)
 
 if options.silent
     close all;
@@ -28,6 +28,7 @@ I_input = im2double(imread(input_file));
 
 I_albedo = im2double(imread(albedo_file));
 I_normal = im2double(imread(normal_file));
+I_mask = im2double(imread(mask_file));
 I_normal_raw = imread(normal_file);
 
 resize_to_input = true;
@@ -40,27 +41,42 @@ end
 
 I_depth = load_depth_map(depth_file, [h, w]);
 
-plot_depth(I_depth, true);
-
 if need_downsample
     I_input = imresize(I_input, downsample_factor);
     [h, w, ~] = size(I_input);
     I_albedo = imresize(I_albedo, [h, w]);
     I_normal = imresize(I_normal, [h, w]);
     I_normal_raw = imresize(I_normal_raw, [h, w]);
+    I_mask = imresize(I_mask, [h, w]);
 end
 
 if resize_to_input
     I_albedo = imresize(I_albedo, [h, w]);
     I_normal = imresize(I_normal, [h, w]);
     I_normal_raw = imresize(I_normal_raw, [h, w]);
+    I_mask = imresize(I_mask, [h, w]);
 else
     I_input = imresize(I_input, [h, w]);
 end
 
-% figure;imshow(I_input);title('input');
-% figure;imshow(I_albedo);title('albedo');
-% figure;imshow(I_normal);title('normal');
+% mask everything
+[h, w, channels] = size(I_mask);
+if channels == 1
+    mask_1 = I_mask;
+    I_mask(:,:,1) = mask_1; I_mask(:,:,2) = mask_1; I_mask(:,:,3) = mask_1;
+end
+I_albedo = I_albedo .* I_mask;
+I_normal = I_normal .* I_mask;
+I_normal_raw = uint8(double(I_normal_raw) .* I_mask);
+mask_pixels = I_mask(:,:,1);
+depth_val = I_depth(:,:,3);
+depth_val(mask_pixels == 0) = -1e6;
+I_depth(:,:,3) = depth_val;
+
+figure;imshow(I_input);title('input');
+figure;imshow(I_albedo);title('albedo');
+figure;imshow(I_normal);title('normal');
+plot_depth(I_depth, true);
 
 % get the valid pixels
 Inx = I_normal_raw(:,:,1); Iny = I_normal_raw(:,:,2); Inz = I_normal_raw(:,:,3);
@@ -69,6 +85,7 @@ edge_pixel_indices = find_edge(I_normal_raw);
 discontinuous_pixels_indices = find_discontinuous_pixels(I_depth, 0.025);
 [hair_pixel_indices, hair_pixel_indices2] = find_hair_pixels(I_input, valid_pixel_indices);
 valid_pixel_indices = setdiff(valid_pixel_indices, edge_pixel_indices);
+
 lighting_pixel_indices = setdiff(valid_pixel_indices, hair_pixel_indices);
 size(valid_pixel_indices)
 num_pixels = length(valid_pixel_indices);
@@ -534,6 +551,8 @@ save_depth_map(fullfile(options.path, 'SFS', sprintf('optimized_depth_map_%d.bin
 save_point_cloud(fullfile(options.path, 'SFS', sprintf('optimized_point_cloud_%d.txt', options.idx)), I_depth_final);
 plot_depth(I_depth, false, true, true, fullfile(options.path, 'SFS', sprintf('depth_mesh_%d.png', options.idx))); 
 plot_depth(I_depth_final, false, true, true, fullfile(options.path, 'SFS', sprintf('optimized_depth_mesh_%d.png', options.idx))); 
+
+%pause;
 
 end
 
