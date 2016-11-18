@@ -1,7 +1,12 @@
 close all;
 
-person = 'Benedict_Cumberbatch';
-person = 'Andy_Lau';
+person = 'Oprah_Winfrey';
+%person = 'Hillary_Clinton';
+%person = 'Benedict_Cumberbatch';
+%person = 'Donald_Trump';
+%person = 'George_W_Bush';
+%person = 'Zhang_Ziyi';
+%person = 'Andy_Lau';
 path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
 
 %person = 'yaoming';

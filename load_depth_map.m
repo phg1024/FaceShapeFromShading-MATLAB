@@ -9,6 +9,9 @@ x = reshape(raw_depth(1,:), w, h)';
 y = reshape(raw_depth(2,:), w, h)';
 z = reshape(raw_depth(3,:), w, h)';
 size(raw_depth)
+if nargin < 2
+    target_sz = [h, w]
+end
 depth(:,:,1) = imresize(x, target_sz, 'bilinear');
 depth(:,:,2) = imresize(y, target_sz, 'bilinear');
 depth(:,:,3) = imresize(z, target_sz, 'bilinear');
