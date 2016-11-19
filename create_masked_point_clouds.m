@@ -42,7 +42,14 @@ for i=1:length(all_images)
     diffmask = diffmask .* mask;
     figure(5); imshow(diffmask);
     
+    masked_do = do;
+    masked_dopt = do(:,:,3);    
+    masked_dopt(diff >= 0.05) = -1e6;
+    %masked_dopt(~mask) = -1e6;
+    %figure;imagesc(masked_dopt);axis equal;title('masked depth');
+    masked_do(:,:,3) = masked_dopt;
+    
     imwrite(diffimg, fullfile(path, 'SFS', sprintf('deformation_%d.png', i-1)));
     imwrite(diffmask, fullfile(path, 'SFS', sprintf('deformation_mask_%d.png', i-1)));
-    pause;
+    save_point_cloud(fullfile(path, 'SFS', sprintf('masked_optimized_point_cloud_%d.txt', i-1)), masked_do);
 end
