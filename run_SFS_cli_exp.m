@@ -1,17 +1,11 @@
+sfs_pipe = fopen('sfs_pipe', 'r');
+path = fgetl(sfs_pipe);
+iteration_index = sscanf('%d', fgetl(sfs_pipe));
+fclose(sfs_pipe);
+
 close all;
-
-person = 'Oprah_Winfrey';
-%person = 'Hillary_Clinton';
-%person = 'Benedict_Cumberbatch';
-%person = 'Donald_Trump';
-%person = 'George_W_Bush';
-%person = 'Zhang_Ziyi';
-%person = 'Andy_Lau';
-path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
-
-person = 'yaoming';
-path = sprintf('/home/phg/Storage/Data/InternetRecon0/%s/crop', person);
-iteration_index = 2;
+fprintf('The path of images is %s\n', path);
+fprintf('Iteration %d\n', iteration_index);
 
 % LoG kernel and LoG matrix
 [LoG, mat_LoG] = LoGMatrix(2, 250, 250, 1.0);
@@ -43,12 +37,8 @@ options.idx = i-1;
 tic;
 refined_normal_map = SFS(input_image, albedo_image, normal_image, depth_map, mask_image, options);
 fprintf('image %d finished in %.3fs\n', i, toc);
-
-pause(2);
 end
 
-% TODO
-% restore image scaling in ioutilites
-% regenerate large scale
-% prepare for SFS
-% figure out how to generate mesh from SFS point cloud
+% create masks based on the refined point clouds
+create_masked_point_clouds_exp(path, iteration_index);
+
