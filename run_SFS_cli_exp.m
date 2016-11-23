@@ -1,6 +1,6 @@
 sfs_pipe = fopen('sfs_pipe', 'r');
 path = fgetl(sfs_pipe);
-iteration_index = sscanf('%d', fgetl(sfs_pipe));
+iteration_index = sscanf(fgetl(sfs_pipe), '%d');
 fclose(sfs_pipe);
 
 close all;
