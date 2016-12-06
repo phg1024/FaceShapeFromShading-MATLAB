@@ -7,6 +7,7 @@ person = 'Oprah_Winfrey';
 %person = 'George_W_Bush';
 %person = 'Zhang_Ziyi';
 %person = 'Andy_Lau';
+%person = 'Jackie_Chan';
 path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
 
 person = 'yaoming';
@@ -33,17 +34,17 @@ parfor i=1:length(all_images)
     normal_image = fullfile(path, 'SFS', sprintf('normal%d.png', i-1));
     mask_image = fullfile(path, 'masked', sprintf('mask%s.png', basename));
     depth_map = fullfile(path, 'SFS', sprintf('depth_map%d.bin', i-1));
-    
+
     options_i = options;
     options_i.idx = i-1;
-    
+
     %[h, w, ~] = size(imread(albedo_image));
     %[LoG, mat_LoG] = LoGMatrix(2, h, w, 1.0);
-    
+
     tic;
     refined_normal_map = SFS(input_image, albedo_image, normal_image, depth_map, mask_image, options_i);
     fprintf('image %d finished in %.3fs\n', i, toc);
-    
+
     pause(2);
 end
 
