@@ -7,10 +7,11 @@ person = 'Oprah_Winfrey';
 %person = 'George_W_Bush';
 %person = 'Zhang_Ziyi';
 %person = 'Andy_Lau';
+%person = 'Jackie_Chan';
 path = sprintf('/home/phg/Storage/Data/InternetRecon2/%s/crop', person);
 
-%person = 'yaoming';
-%path = sprintf('/home/phg/Storage/Data/InternetRecon0/%s/crop', person);
+person = 'yaoming';
+path = sprintf('/home/phg/Storage/Data/InternetRecon0/%s/crop', person);
 
 % LoG kernel and LoG matrix
 [LoG, mat_LoG] = LoGMatrix(2, 250, 250, 1.0);
