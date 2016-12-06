@@ -42,4 +42,3 @@ end
 
 % create masks based on the refined point clouds
 create_masked_point_clouds(path);
-
