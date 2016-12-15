@@ -24,5 +24,6 @@ end
 
 scatter(cb(:), cr(:), 10.0, [r(:), g(:), b(:)], options.marker);
 axis equal;
+
 model = [cb(:), cr(:)];
 end
