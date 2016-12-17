@@ -2,7 +2,7 @@ function face_seg(path)
 enable_visualization = false;
 close all;
 
-all_images = read_settings(fullfile(path, 'settings.txt'));
+[all_images, all_points] = read_settings(fullfile(path, 'settings.txt'));
 
 core_face_mask = logical(im2double(imread('/home/phg/Data/Multilinear/albedos/core_face.png')));
 hair_region_mask = logical(im2double(imread('/home/phg/Data/Multilinear/albedos/hair_mask.png')));
@@ -59,7 +59,11 @@ parfor i=1:length(all_images)
     
     albedo_image = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', i-1));
     
+    input_points = fullfile(path, all_points{i});
+    
     try
+        points = read_points(input_points);
+        
         I = im2double(imread(input_image));
         Ib = I;
         %for j=1:1
@@ -361,6 +365,76 @@ parfor i=1:length(all_images)
         Ifinal = I;
         valid_pts = Imask;
     end
+    
+    % finally, exclude eye-brow region
+    left_eye_brow = 22:27;
+    right_eye_brow = 16:21;
+        
+    if enable_visualization
+        figure; 
+        subplot(1, 3, 1);
+        imshow(I); hold on;
+        plot(points(:,1), points(:,2), 'g.');
+        for k=1:size(points,1)
+            text(points(k,1), points(k,2), num2str(k));
+        end
+
+        fill(points(left_eye_brow,1), points(left_eye_brow,2), 'g');
+        fill(points(right_eye_brow,1), points(right_eye_brow,2), 'g');
+    end
+
+    % find the eye-brow region
+    [L,N] = superpixels(I .* Imask_rgb{i}, 8192);
+    seg_idx = label2idx(L);
+    all_eye_brow_pixels = [];
+    for labelVal = 1:N
+        % the pixels in this segment
+        pixel_indices = seg_idx{labelVal};
+        % include it if this segment overlaps with the eye-brow region 
+        in_left = inpolygon(pixel_indices ./ h, mod(pixel_indices, h), points(left_eye_brow,1), points(left_eye_brow,2));
+        in_right = inpolygon(pixel_indices ./ h, mod(pixel_indices, h), points(right_eye_brow,1), points(right_eye_brow,2));
+        inside_thres = 0.1
+        if sum(in_left) > length(in_left) * inside_thres || sum(in_right) > length(in_right) * inside_thres
+            all_eye_brow_pixels = union(all_eye_brow_pixels, pixel_indices);
+        end
+    end
+    length(all_eye_brow_pixels)
+
+    Ieyebrow = zeros(h, w);
+    Ieyebrow(all_eye_brow_pixels) = 255.0;
+    %figure; imshow(Ieyebrow);
+
+    se = strel('disk', 4, 8);
+    Ieyebrow = imdilate(Ieyebrow, se);
+    se = strel('disk', 2, 8);
+    Ieyebrow = imerode(Ieyebrow, se);
+    se = strel('disk', 4);
+    Ieyebrow = imclose(Ieyebrow, se);
+    Ieyebrow = imclose(Ieyebrow, se);
+    Ieyebrow = imclose(Ieyebrow, se);
+    %figure; imshow(Ieyebrow);
+    %pause
+    all_eye_brow_pixels = find(Ieyebrow > 0);
+    
+    Ieyebrow = ones(h, w);
+    Iemask = Ieyebrow; Iemask(all_eye_brow_pixels) = 0;
+    
+    Ieyebrow = zeros(h, w);
+    Ieyebrow(all_eye_brow_pixels) = 0.5; Ier = Ieyebrow;
+    Ieyebrow(all_eye_brow_pixels) = 0.5; Ieg = Ieyebrow;
+    Ieyebrow(all_eye_brow_pixels) = 1; Ieb = Ieyebrow;
+        
+    if enable_visualization
+        subplot(1, 3, 2);
+        imshow(I .* cat(3, Iemask) + cat(3, Ier, Ieg, Ieb));
+
+        subplot(1, 3, 3);
+        imshow(imoverlay(I .* Imask_rgb{i},BW .* Imask,'cyan'));
+        pause;
+    end
+    
+    valid_pts = valid_pts .* Iemask;
+    Ifinal = Ifinal .* cat(3, valid_pts, valid_pts, valid_pts);
     
     %imwrite(valid_pts, fullfile(path, [basename, '_mask.png']));
     imwrite(Ifinal, fullfile(path, 'masked', [basename, '.png']));
