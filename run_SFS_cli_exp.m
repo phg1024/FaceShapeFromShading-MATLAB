@@ -30,13 +30,13 @@ parfor i=1:length(all_images)
     normal_image = fullfile(options.path, 'SFS', sprintf('normal%d.png', i-1));
     mask_image = fullfile(path, 'masked', sprintf('mask%s.png', basename));
     depth_map = fullfile(options.path, 'SFS', sprintf('depth_map%d.bin', i-1));
-    
+
     options_i = options;
     options_i.idx = i-1;
-    
+
     %[h, w, ~] = size(imread(albedo_image));
     %[LoG, mat_LoG] = LoGMatrix(2, h, w, 1.0);
-    
+
     tic;
     refined_normal_map = SFS(input_image, albedo_image, normal_image, depth_map, mask_image, options_i);
     fprintf('image %d finished in %.3fs\n', i, toc);
@@ -44,3 +44,7 @@ end
 
 % create masks based on the refined point clouds
 create_masked_point_clouds_exp(path, iteration_index);
+
+% No need to do this in iterative steps
+% select point clouds
+% select_point_clouds_exp(path, iteration_index);

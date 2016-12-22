@@ -433,10 +433,14 @@ parfor i=1:length(all_images)
         pause;
     end
     
+    % save the mask including eyebrow region
+    imwrite(valid_pts, fullfile(path, 'masked', ['a_mask', basename, '.png']));
+    
+    % exclude eyebrow region
     valid_pts = valid_pts .* Iemask;
     Ifinal = Ifinal .* cat(3, valid_pts, valid_pts, valid_pts);
     
-    %imwrite(valid_pts, fullfile(path, [basename, '_mask.png']));
+    % save the mask excluding eyebrow region
     imwrite(Ifinal, fullfile(path, 'masked', [basename, '.png']));
     imwrite(valid_pts, fullfile(path, 'masked', ['mask', basename, '.png']));
     

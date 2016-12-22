@@ -2,6 +2,7 @@ function create_masked_point_clouds_exp(path, iteration_index)
 visualize_results = false;
 
 all_images = read_settings(fullfile(path, 'settings.txt'));
+all_diffs = cell(length(all_images), 1);
 
 parfor i=1:length(all_images)
     %close all;
@@ -51,10 +52,14 @@ parfor i=1:length(all_images)
     %masked_dopt(~mask) = -1e6;
     %figure;imagesc(masked_dopt);axis equal;title('masked depth');
     masked_do(:,:,3) = masked_dopt;
+    
+    all_diffs{i} = diff;
 
     imwrite(diffimg, fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('deformation_%d.png', i-1)));
     imwrite(diffmask, fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('deformation_mask_%d.png', i-1)));
     save_point_cloud(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('masked_optimized_point_cloud_%d.txt', i-1)), masked_do);
 end
+
+save(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', 'deformation.mat'), 'all_diffs');
 
 end

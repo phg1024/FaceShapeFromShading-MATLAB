@@ -49,4 +49,8 @@ end
 
 % create masks based on the refined point clouds
 create_masked_point_clouds(path);
+
+% select point clouds
+select_point_clouds(path);
+
 toc;
