@@ -401,6 +401,18 @@ for iter=1:3
     normal_map = max(0, min(1, normal_map));
 end
 
+% compute the image fitting error
+Y = [ones(size(nx)), nx, ny, nz, nx.*ny, nx.*nz, ny.*nz, nx.*nx-ny.*ny, 3*nz.*nz-1];
+Yl = Y * l;
+lighting_mask = reshape(Yl, h, w);
+figure;imagesc(lighting_mask); title('lighting\_new'); axis equal; colorbar; colormap gray;
+
+Ifitted = albedo_map .* repmat(lighting_mask, 1, 1, 3);
+Idiff = Ifitted - I_input;
+Idiff = sum(Idiff.*Idiff, 3);
+Idiff(~good_indices_1) = 0;
+%figure;imagesc(Idiff);axis equal; caxis([0 0.25]);
+
 if false
     hfig = figure;
     subplot(1, 4, 1); imshow(I_input); title('input');
@@ -544,6 +556,8 @@ subplot(1, 7, 7); plot_depth(I_depth_final, false, true); title('refined depth')
 set(hfig, 'Position', [0 0 1200 480])
 
 % save all output images
+plot_error(Idiff, good_indices_1, true, fullfile(options.path, 'SFS', sprintf('error_%d.png', options.idx)));
+imwrite(Ifitted, fullfile(options.path, 'SFS', sprintf('fitted_%d.png', options.idx)))
 imwrite(albedo_map, fullfile(options.path, 'SFS', sprintf('optimized_albedo_%d.png', options.idx)));
 imwrite(normal_map, fullfile(options.path, 'SFS', sprintf('optimized_normal_%d.png', options.idx)));
 plot_lighting(l, true, fullfile(options.path, 'SFS', sprintf('optimized_lighting_%d.png', options.idx)));
