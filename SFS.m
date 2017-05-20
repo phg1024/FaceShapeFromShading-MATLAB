@@ -480,7 +480,8 @@ Cy = sparse(1:dh*dw, v_pixel_indices, ones(dh*dw, 1)) - sparse(1:dh*dw, v_pixel_
 w_data = 1.0;
 A_data = [spdiags(abs(1.0 ./ (Cx * x0(:))), 0, dh*dw, dh*dw) * Cx; ...
           spdiags(abs(1.0 ./ (Cy * y0(:))), 0, dh*dw, dh*dw) * Cy];
-A_data = A_data(valid_depth_points_2, valid_depth_points) * w_data;
+depth_scaling_factor = 0.9; % boost the depth difference a bit
+A_data = A_data(valid_depth_points_2, valid_depth_points) * w_data * depth_scaling_factor;
 b_data = [-nx(:) ./ nz(:); ...
           -ny(:) ./ nz(:)];
 % remove discontinous pixels

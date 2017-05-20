@@ -54,6 +54,6 @@ end
 create_masked_point_clouds(path);
 
 % select point clouds
-select_point_clouds(path);
+select_point_clouds_dummy(path);
 
 toc;

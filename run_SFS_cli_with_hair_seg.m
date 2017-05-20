@@ -12,7 +12,7 @@ delete(poolobj);
 parpool('8workers', 8);
 
 % perform face segmentation first
-face_seg(path);
+face_seg(path, struct('use_hair_seg', true));
 
 all_images = read_settings(fullfile(path, 'settings.txt'));
 

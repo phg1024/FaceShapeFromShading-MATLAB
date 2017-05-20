@@ -7,9 +7,14 @@ close all;
 fprintf('The path of images is %s\n', path);
 fprintf('Iteration %d\n', iteration_index);
 
+all_images = read_settings(fullfile(path, 'settings.txt'));
+
+in_img_for_size = imread(fullfile(path, all_images{1}));
+[img_w, img_h, ~] = size(in_img_for_size)
+
 % LoG kernel and LoG matrix
-[LoG, mat_LoG] = LoGMatrix(2, 250, 250, 1.0);
-[albedo_LoG, albedo_mat_LoG] = LoGMatrix(2, 250, 250, 0.5);
+[LoG, mat_LoG] = LoGMatrix(2, img_w, img_h, 1.0);
+[albedo_LoG, albedo_mat_LoG] = LoGMatrix(2, img_w, img_h, 0.5);
 
 options.LoG = LoG;
 options.mat_LoG = mat_LoG;
@@ -18,8 +23,6 @@ options.albedo_mat_LoG = albedo_mat_LoG;
 options.path = fullfile(path, ['iteration_', num2str(iteration_index)]);
 
 options.silent = true;
-
-all_images = read_settings(fullfile(path, 'settings.txt'));
 
 parpool('8workers', 8);
 

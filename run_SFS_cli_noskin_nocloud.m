@@ -12,7 +12,7 @@ delete(poolobj);
 parpool('8workers', 8);
 
 % perform face segmentation first
-face_seg(path);
+face_seg_dummy(path);
 
 all_images = read_settings(fullfile(path, 'settings.txt'));
 
@@ -51,9 +51,9 @@ parfor i=1:length(all_images)
 end
 
 % create masks based on the refined point clouds
-create_masked_point_clouds(path);
+create_masked_point_clouds_dummy(path);
 
 % select point clouds
-select_point_clouds(path);
+select_point_clouds_dummy(path);
 
 toc;

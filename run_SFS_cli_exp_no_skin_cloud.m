@@ -1,18 +1,11 @@
-tic;
 sfs_pipe = fopen('sfs_pipe', 'r');
-path = fscanf(sfs_pipe, '%s');
+path = fgetl(sfs_pipe);
+iteration_index = sscanf(fgetl(sfs_pipe), '%d');
 fclose(sfs_pipe);
 
 close all;
 fprintf('The path of images is %s\n', path);
-
-% create the parallel workers pool
-poolobj = gcp('nocreate');
-delete(poolobj);
-parpool('8workers', 8);
-
-% perform face segmentation first
-face_seg(path);
+fprintf('Iteration %d\n', iteration_index);
 
 all_images = read_settings(fullfile(path, 'settings.txt'));
 
@@ -27,17 +20,19 @@ options.LoG = LoG;
 options.mat_LoG = mat_LoG;
 options.albedo_LoG = albedo_LoG;
 options.albedo_mat_LoG = albedo_mat_LoG;
-options.path = path;
+options.path = fullfile(path, ['iteration_', num2str(iteration_index)]);
 
 options.silent = true;
 
+parpool('8workers', 8);
+
 parfor i=1:length(all_images)
-    input_image = fullfile(path, all_images{i})
+    input_image = fullfile(path, all_images{i});
     [~, basename, ~] = fileparts(all_images{i});
-    albedo_image = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', i-1))
-    normal_image = fullfile(path, 'SFS', sprintf('normal%d.png', i-1))
-    mask_image = fullfile(path, 'masked', sprintf('mask%s.png', basename))
-    depth_map = fullfile(path, 'SFS', sprintf('depth_map%d.bin', i-1))
+    albedo_image = fullfile(options.path, 'SFS', sprintf('albedo_transferred_%d.png', i-1));
+    normal_image = fullfile(options.path, 'SFS', sprintf('normal%d.png', i-1));
+    mask_image = fullfile(path, 'masked', sprintf('mask%s.png', basename));
+    depth_map = fullfile(options.path, 'SFS', sprintf('depth_map%d.bin', i-1));
 
     options_i = options;
     options_i.idx = i-1;
@@ -51,9 +46,8 @@ parfor i=1:length(all_images)
 end
 
 % create masks based on the refined point clouds
-create_masked_point_clouds(path);
+create_masked_point_clouds_exp_dummy(path, iteration_index);
 
+% No need to do this in iterative steps
 % select point clouds
-select_point_clouds(path);
-
-toc;
+% select_point_clouds_exp(path, iteration_index);

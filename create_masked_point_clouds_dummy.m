@@ -41,15 +41,20 @@ parfor i=1:length(all_images)
         figure(4); imshow(diffimg); title('diff'); axis equal;
     end
 
-    diffmask = diff < 0.05;
-    diffmask = diffmask .* mask;
-    if visualize_results
-        figure(5); imshow(diffmask);
-    end
+    % Use dummy mask
+    % diffmask = diff < 0.05;
+    % diffmask = diffmask .* mask;
+    % if visualize_results
+    %   figure(5); imshow(diffmask);
+    % end
+
+    % This is a dummy mask
+    diffmask = mask;
 
     masked_do = do;
     masked_dopt = do(:,:,3);
-    masked_dopt(diff >= 0.05) = -1e6;
+    % This is a dummy task, don't mask it
+    %masked_dopt(diff >= 0.05) = -1e6;
     %masked_dopt(~mask) = -1e6;
     %figure;imagesc(masked_dopt);axis equal;title('masked depth');
     masked_do(:,:,3) = masked_dopt;
