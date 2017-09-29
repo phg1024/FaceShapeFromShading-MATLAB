@@ -60,10 +60,11 @@ parfor i=1:length(all_images)
     close all;
 
     [~, basename, ext] = fileparts(all_images{i})
+    image_index = str2num(basename);
 
     input_image = fullfile(path, all_images{i});
 
-    albedo_image = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', i-1));
+    albedo_image = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', image_index));
 
     input_points = fullfile(path, all_points{i});
 

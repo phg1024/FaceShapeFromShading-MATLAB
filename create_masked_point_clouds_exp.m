@@ -2,19 +2,20 @@ function create_masked_point_clouds_exp(path, iteration_index)
 visualize_results = false;
 
 all_images = read_settings(fullfile(path, 'settings.txt'));
-all_diffs = cell(length(all_images), 1);
+all_diffs = cell(1024, 1);
 
-parfor i=1:length(all_images)
+for i=1:length(all_images)
     %close all;
 
     [~, basename, ext] = fileparts(all_images{i})
+    image_index = str2num(basename);
 
     input_image = fullfile(path, all_images{i});
 
-    albedo_image = fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('albedo_transferred_%d.png', i-1));
+    albedo_image = fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('albedo_transferred_%d.png', image_index));
 
-    d = load_depth_map(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('depth_map%d.bin', i-1)));
-    do = load_depth_map(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('optimized_depth_map_%d.bin', i-1)));
+    d = load_depth_map(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('depth_map%d.bin', image_index)));
+    do = load_depth_map(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('optimized_depth_map_%d.bin', image_index)));
     if visualize_results
       figure(1);imagesc(d(:,:,3));axis equal;
       figure(2);imagesc(do(:,:,3));axis equal;
@@ -52,12 +53,12 @@ parfor i=1:length(all_images)
     %masked_dopt(~mask) = -1e6;
     %figure;imagesc(masked_dopt);axis equal;title('masked depth');
     masked_do(:,:,3) = masked_dopt;
-    
-    all_diffs{i} = diff;
 
-    imwrite(diffimg, fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('deformation_%d.png', i-1)));
-    imwrite(diffmask, fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('deformation_mask_%d.png', i-1)));
-    save_point_cloud(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('masked_optimized_point_cloud_%d.txt', i-1)), masked_do);
+    all_diffs{image_index} = diff;
+
+    imwrite(diffimg, fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('deformation_%d.png', image_index)));
+    imwrite(diffmask, fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('deformation_mask_%d.png', image_index)));
+    save_point_cloud(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('masked_optimized_point_cloud_%d.txt', image_index)), masked_do);
 end
 
 save(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', 'deformation.mat'), 'all_diffs');

@@ -9,7 +9,7 @@ fprintf('The path of images is %s\n', path);
 % create the parallel workers pool
 poolobj = gcp('nocreate');
 delete(poolobj);
-parpool('8workers', 8);
+parpool('8workers', 6);
 
 % perform face segmentation first
 face_seg(path, struct('use_hair_seg', true));
@@ -34,13 +34,14 @@ options.silent = true;
 parfor i=1:length(all_images)
     input_image = fullfile(path, all_images{i})
     [~, basename, ~] = fileparts(all_images{i});
-    albedo_image = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', i-1))
-    normal_image = fullfile(path, 'SFS', sprintf('normal%d.png', i-1))
-    mask_image = fullfile(path, 'masked', sprintf('mask%s.png', basename))
-    depth_map = fullfile(path, 'SFS', sprintf('depth_map%d.bin', i-1))
+    image_index = str2num(basename);
+    albedo_image = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', image_index))
+    normal_image = fullfile(path, 'SFS', sprintf('normal%d.png', image_index))
+    mask_image = fullfile(path, 'masked', sprintf('mask%d.png', image_index))
+    depth_map = fullfile(path, 'SFS', sprintf('depth_map%d.bin', image_index))
 
     options_i = options;
-    options_i.idx = i-1;
+    options_i.idx = image_index;
 
     %[h, w, ~] = size(imread(albedo_image));
     %[LoG, mat_LoG] = LoGMatrix(2, h, w, 1.0);

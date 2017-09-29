@@ -5,7 +5,6 @@ figure_idx = 1;
 
 all_images = read_settings(fullfile(path, 'settings.txt'));
 selected_images = read_indices(fullfile(path, 'multi_recon', 'selection.txt'));
-selected_images = selected_images+1;
 
 all_diffs = load(fullfile(path, 'SFS', 'deformation.mat'));
 all_diffs = all_diffs.all_diffs;
@@ -14,12 +13,13 @@ for i=1:length(all_images)
     %close all;
 
     [~, basename, ext] = fileparts(all_images{i})
-    all_basenames(i) = str2num(basename);
+    image_index = str2num(basename);
+    all_basenames(i) = image_index;
 
     input_image_filename = fullfile(path, all_images{i});
     input_image{i} = imread(input_image_filename);
-    albedo_image_filename = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', i-1));
-    deformation_image_filename = fullfile(path, 'SFS', sprintf('deformation_%d.png', i-1));
+    albedo_image_filename = fullfile(path, 'SFS', sprintf('albedo_transferred_%d.png', image_index));
+    deformation_image_filename = fullfile(path, 'SFS', sprintf('deformation_%d.png', image_index));
     deformation_image{i} = imread(deformation_image_filename);
 
     % mask from albedo-based segmentation
@@ -27,11 +27,11 @@ for i=1:length(all_images)
     albedo_mask = im2double(imread(albedo_mask_filename));
 
     % mask from deformation based region selection
-    deformation_mask_filename = fullfile(path, 'SFS', sprintf('deformation_mask_%d.png', i-1));
+    deformation_mask_filename = fullfile(path, 'SFS', sprintf('deformation_mask_%d.png', image_index));
     deformation_mask = im2double(imread(deformation_mask_filename));
 
-    d = load_depth_map(fullfile(path, 'SFS', sprintf('depth_map%d.bin', i-1)));
-    do = load_depth_map(fullfile(path, 'SFS', sprintf('optimized_depth_map_%d.bin', i-1)));
+    d = load_depth_map(fullfile(path, 'SFS', sprintf('depth_map%d.bin', image_index)));
+    do = load_depth_map(fullfile(path, 'SFS', sprintf('optimized_depth_map_%d.bin', image_index)));
 
     % initial mask from large scale recon
     mask0 = d(:,:,3) < -10;
@@ -63,8 +63,8 @@ for i=1:length(all_images)
     deformation_loss(i) = 1.0 - deformed_valid_cnt / sfs_valid_cnt;
     total_loss(i) = 1.0 - (albedo_valid_cnt / init_valid_cnt);% * (deformed_valid_cnt / sfs_valid_cnt);
 
-    max_diff(i) = max(max(all_diffs{i}));
-    mean_diff(i) = sum(sum(all_diffs{i})) / sfs_valid_cnt;
+    max_diff(i) = max(max(all_diffs{image_index}));
+    mean_diff(i) = sum(sum(all_diffs{image_index})) / sfs_valid_cnt;
 
     if visualize_results
         pause;
@@ -98,7 +98,7 @@ if visualize_results
 end
 
 % pick the first 75% images
-filtered_images = sorted_idx(1:0.8*length(sorted_idx));
+filtered_images = all_basenames(sorted_idx(1:0.8*length(sorted_idx)));
 filtered_images = intersect(filtered_images, selected_images);
 
 if visualize_results
@@ -115,7 +115,7 @@ if visualize_results
     end
 end
 
-filtered_images_indices = sort(all_basenames(filtered_images));
+filtered_images_indices = sort(filtered_images);
 write_indices(fullfile(path, 'SFS', 'selection.txt'), filtered_images_indices);
 
 end
