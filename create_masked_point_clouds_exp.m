@@ -14,6 +14,9 @@ for i=1:length(all_images)
 
     albedo_image = fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('albedo_transferred_%d.png', image_index));
 
+    % load Idiff
+    load(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('error_%d.mat', image_index)));
+
     d = load_depth_map(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('depth_map%d.bin', image_index)));
     do = load_depth_map(fullfile(path, ['iteration_', num2str(iteration_index)], 'SFS', sprintf('optimized_depth_map_%d.bin', image_index)));
     if visualize_results
@@ -41,8 +44,13 @@ for i=1:length(all_images)
       figure(4); imshow(diffimg); title('diff'); axis equal;
     end
 
+    Idiffmask = imgaussfilt(Idiff, 1) < 0.020;
+    if visualize_results
+        figure(5);imshow(Idiffmask);
+    end
+
     diffmask = diff < 0.05;
-    diffmask = diffmask .* mask;
+    diffmask = diffmask .* mask .* Idiffmask;
     if visualize_results
       figure(5); imshow(diffmask);
     end

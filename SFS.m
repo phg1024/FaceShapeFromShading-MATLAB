@@ -26,6 +26,10 @@ end
 
 I_input = im2double(imread(input_file));
 
+if true
+  I_input = imadjust(I_input, [], [], 2.2) * 0.5 + I_input * 0.7;
+end
+
 I_albedo = im2double(imread(albedo_file));
 I_normal = im2double(imread(normal_file));
 I_mask = im2double(imread(mask_file));
@@ -558,7 +562,9 @@ set(hfig, 'Position', [0 0 1200 480])
 
 % save all output images
 plot_error(Idiff, good_indices_1, true, fullfile(options.path, 'SFS', sprintf('error_%d.png', options.idx)));
-imwrite(Ifitted, fullfile(options.path, 'SFS', sprintf('fitted_%d.png', options.idx)))
+save(fullfile(options.path, 'SFS', sprintf('error_%d.mat', options.idx)), 'Idiff');
+imwrite(I_input, fullfile(options.path, 'SFS', sprintf('input_%d.jpg', options.idx)));
+imwrite(Ifitted, fullfile(options.path, 'SFS', sprintf('fitted_%d.png', options.idx)));
 imwrite(albedo_map, fullfile(options.path, 'SFS', sprintf('optimized_albedo_%d.png', options.idx)));
 imwrite(normal_map, fullfile(options.path, 'SFS', sprintf('optimized_normal_%d.png', options.idx)));
 plot_lighting(l, true, fullfile(options.path, 'SFS', sprintf('optimized_lighting_%d.png', options.idx)));
